@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excel 单元格清理工具</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #f0f2f5;
+    margin: 0;
+    padding: 16px;
+    color: #333;
+    min-width: 1400px;
+  }
+  .container {
+    max-width: 1860px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    padding: 20px 28px 26px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 16px; }
+
+  label.main-label {
+    display: block; font-size: 13.5px; font-weight: 600;
+    margin-bottom: 6px; color: #444;
+  }
+  .hint { font-size: 12px; color: #999; font-weight: normal; margin-left: 6px; }
+
+  textarea, input[type="text"] {
+    width: 100%; padding: 8px 11px; font-size: 13.5px;
+    border: 1px solid #d0d5dd; border-radius: 8px;
+    outline: none; transition: border-color .2s;
+    font-family: inherit;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74,144,226,0.12);
+  }
+  textarea { min-height: 86px; resize: vertical; line-height: 1.55; }
+
+  .file-box {
+    border: 2px dashed #c3cbd8; border-radius: 10px;
+    padding: 14px; text-align: center; cursor: pointer;
+    transition: all .2s; background: #fafbfc;
+  }
+  .file-box:hover, .file-box.dragover {
+    border-color: #4a90e2; background: #f0f7ff;
+  }
+  .file-box .icon { font-size: 22px; }
+  .file-box .text { font-size: 12.5px; color: #666; margin-top: 2px; }
+  .file-box .filename {
+    margin-top: 6px; font-size: 12.5px; color: #4a90e2;
+    font-weight: 600; word-break: break-all;
+  }
+  input[type="file"] { display: none; }
+
+  .top-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr 1.2fr;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1600px) {
+    .top-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .range-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: #f0f7ff; border: 1px solid #cfe2ff;
+    border-radius: 8px; padding: 8px 12px;
+    margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .range-bar .label { font-size: 13px; color: #2a5d9f; font-weight: 600; }
+  .range-bar input[type="text"] {
+    width: 240px; padding: 6px 10px; font-size: 13.5px;
+    font-family: Consolas, monospace;
+    border-color: #a9c7ec;
+  }
+  .range-bar .count { font-size: 12.5px; color: #7a95b8; }
+  .range-bar .spacer { flex: 1; }
+  .range-bar button {
+    padding: 6px 14px; font-size: 12.5px;
+    border: 1px solid #b8c9e0; border-radius: 6px;
+    background: #fff; color: #4a6b95; cursor: pointer;
+  }
+  .range-bar button:hover { background: #e8f1fd; }
+  .range-bar button.primary {
+    background: #4a90e2; color: #fff; border-color: #4a90e2;
+  }
+  .range-bar button.primary:hover { background: #357abd; }
+  .range-bar button:disabled {
+    opacity: .5; cursor: not-allowed;
+  }
+
+  .merge-alert {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; border-radius: 8px;
+    margin-bottom: 10px; font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .merge-alert.has-merge {
+    background: #fff7e6; border: 1px solid #ffd591; color: #ad6800;
+  }
+  .merge-alert.no-merge {
+    background: #f6ffed; border: 1px solid #b7eb8f; color: #389e0d;
+  }
+  .merge-alert .icon { font-size: 16px; }
+  .merge-alert b { color: inherit; }
+
+  .preview-wrap {
+    border: 1px solid #e2e6ec;
+    border-radius: 10px; overflow: hidden;
+  }
+  .preview-header {
+    background: #f7f9fc; padding: 8px 14px;
+    font-size: 12.5px; color: #555;
+    display: flex; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 8px;
+    border-bottom: 1px solid #e2e6ec;
+  }
+  .preview-header .left { font-weight: 600; color: #333; }
+  .preview-header .right { font-size: 12px; color: #888; }
+  .sheet-tabs {
+    display: flex; gap: 6px; padding: 6px 12px;
+    background: #fafbfd; overflow-x: auto;
+    border-bottom: 1px solid #e2e6ec;
+  }
+  .sheet-tab {
+    padding: 5px 12px; font-size: 12.5px;
+    border-radius: 6px 6px 0 0; cursor: pointer;
+    background: #eef1f5; color: #555; white-space: nowrap;
+    border: 1px solid transparent; border-bottom: none;
+    user-select: none;
+  }
+  .sheet-tab:hover { background: #e3e9f2; }
+  .sheet-tab.active {
+    background: #fff; color: #2a5d9f;
+    font-weight: 600; border-color: #e2e6ec;
+    margin-bottom: -1px; padding-bottom: 6px;
+  }
+
+  .table-scroll {
+    height: 520px;
+    overflow: auto;
+    user-select: none; position: relative;
+    background: #fff;
+  }
+  table.grid {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+    table-layout: fixed;
+  }
+  table.grid th, table.grid td {
+    border-right: 1px solid #e5e9ef;
+    border-bottom: 1px solid #e5e9ef;
+    padding: 3px 7px;
+    width: 90px; min-width: 90px; max-width: 90px;
+    overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+    height: 24px;
+    line-height: 18px;
+  }
+  table.grid th {
+    background: #f4f6fa; color: #555;
+    font-weight: 600; position: sticky; top: 0; z-index: 3;
+    text-align: center;
+  }
+  table.grid th.rowhead {
+    position: sticky; left: 0; z-index: 4;
+    background: #f4f6fa; text-align: center;
+    width: 48px; min-width: 48px; max-width: 48px;
+  }
+  table.grid th.corner {
+    left: 0; top: 0; z-index: 5;
+    width: 48px; min-width: 48px; max-width: 48px;
+    background: #eef1f5;
+  }
+  table.grid td {
+    background: #fff; cursor: cell; color: #333;
+  }
+  table.grid td.sel {
+    background: #d6e8ff !important;
+  }
+  table.grid td.merged-down {
+    background: #f0f4fa;
+    color: #a0aec0;
+    text-align: center;
+  }
+  table.grid td.merged-down::after {
+    content: "↕";
+    font-size: 11px;
+    color: #b0bccb;
+  }
+  table.grid td.sel.merged-down {
+    background: #c8ddf8 !important;
+  }
+  table.grid td.merge-anchor {
+    box-shadow: inset 3px 0 0 #ffb84d;
+  }
+
+  .mini-map {
+    height: 8px; background: #eef1f5; position: relative;
+    border-top: 1px solid #e2e6ec;
+  }
+  .mini-map .view {
+    position: absolute; top: 0; height: 100%;
+    background: rgba(74,144,226,0.35);
+    border-left: 1px solid #4a90e2;
+    border-right: 1px solid #4a90e2;
+    pointer-events: none;
+  }
+
+  .options-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .options-row label {
+    font-weight: normal; font-size: 13px;
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer;
+  }
+  .options-row input[type="checkbox"] {
+    width: 15px; height: 15px; cursor: pointer;
+  }
+  .options-note {
+    font-size: 11.5px; color: #999; margin-top: 6px; line-height: 1.6;
+  }
+
+  .btn {
+    width: 100%; padding: 12px; font-size: 15.5px;
+    font-weight: 600; color: #fff; background: #4a90e2;
+    border: none; border-radius: 8px; cursor: pointer;
+    transition: background .2s; margin-top: 8px;
+  }
+  .btn:hover { background: #357abd; }
+  .btn:disabled { background: #b0c4de; cursor: not-allowed; }
+
+  .status {
+    margin-top: 12px; padding: 10px 14px;
+    border-radius: 8px; font-size: 12.5px; display: none;
+    line-height: 1.7;
+  }
+  .status.info { background: #e8f1fd; color: #2a5d9f; display: block; }
+  .status.success { background: #e6f7ec; color: #1e7e42; display: block; }
+  .status.error { background: #fdeaea; color: #c0392b; display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 Excel 单元格清理工具</h1>
+  <div class="subtitle">选择文件 → 框选范围 → 检测合并 → 白名单清理 → 删除空白行 → 下载</div>
+
+  <div class="top-grid">
+    <div>
+      <label class="main-label">① 选择 Excel 文件</label>
+      <div class="file-box" id="fileBox">
+        <div class="icon">📁</div>
+        <div class="text">点击选择，或拖拽文件</div>
+        <div class="filename" id="fileName"></div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.xlsb">
+    </div>
+
+    <div>
+      <label class="main-label">② 保留内容（白名单） <span class="hint">每行一个，或用逗号分隔</span></label>
+      <textarea id="keepInput" placeholder="苹果&#10;香蕉&#10;橙子"></textarea>
+    </div>
+
+    <div>
+      <label class="main-label">③ 处理选项</label>
+      <div class="options-row">
+        <label><input type="checkbox" id="optTrim" checked> 忽略前后空格</label>
+        <label><input type="checkbox" id="optContains"> 包含匹配</label>
+        <label><input type="checkbox" id="optAllSheets"> 处理所有工作表</label>
+      </div>
+      <div class="options-note">
+        默认只处理当前工作表。<br>
+        勾选"所有工作表"后，把同样的范围套用到每张表。<br>
+        <b style="color:#2a5d9f;">只拆解框选范围内的合并单元格。</b><br>
+        <b style="color:#c0392b;">处理后会物理删除空白行（整行都空才删）。</b><br>
+        <b style="color:#c0392b;">白名单为空时不处理，会弹窗提示。</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="range-bar" id="rangeBar" style="display:none;">
+    <span class="label">处理范围：</span>
+    <input type="text" id="rangeInput" placeholder="如 A1:C100">
+    <span class="count" id="rangeCount"></span>
+    <span class="spacer"></span>
+    <button id="btnFromSelection" disabled>用框选结果</button>
+    <button id="btnClearRange">清除</button>
+    <button id="btnSelectAll" class="primary">全选数据区</button>
+  </div>
+
+  <div class="merge-alert" id="mergeAlert" style="display:none;"></div>
+
+  <div id="previewSection" style="display:none;">
+    <div class="preview-wrap">
+      <div class="preview-header">
+        <span class="left" id="previewTitle">数据预览</span>
+        <span class="right" id="previewSubtitle"></span>
+      </div>
+      <div class="sheet-tabs" id="sheetTabs"></div>
+      <div class="table-scroll" id="tableScroll">
+        <table class="grid" id="gridTable"></table>
+      </div>
+      <div class="mini-map" id="miniMap"><div class="view" id="miniView"></div></div>
+    </div>
+  </div>
+
+  <button class="btn" id="runBtn" disabled>开始处理并下载</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+(function() {
+  const fileInput = document.getElementById('fileInput');
+  const fileBox = document.getElementById('fileBox');
+  const fileNameEl = document.getElementById('fileName');
+  const previewSection = document.getElementById('previewSection');
+  const sheetTabsEl = document.getElementById('sheetTabs');
+  const gridTable = document.getElementById('gridTable');
+  const tableScroll = document.getElementById('tableScroll');
+  const miniView = document.getElementById('miniView');
+  const rangeBar = document.getElementById('rangeBar');
+  const rangeInput = document.getElementById('rangeInput');
+  const rangeCountEl = document.getElementById('rangeCount');
+  const btnFromSelection = document.getElementById('btnFromSelection');
+  const btnClearRange = document.getElementById('btnClearRange');
+  const btnSelectAll = document.getElementById('btnSelectAll');
+  const mergeAlert = document.getElementById('mergeAlert');
+  const runBtn = document.getElementById('runBtn');
+  const statusEl = document.getElementById('status');
+  const previewSubtitle = document.getElementById('previewSubtitle');
+  const previewTitle = document.getElementById('previewTitle');
+
+  let workbook = null;
+  let selectedFile = null;
+  let currentSheetName = null;
+  let currentSheetData = null;
+  let currentMaxRows = 0;
+  let currentMaxCols = 0;
+  let currentMerges = [];
+
+  let dragSelection = null;
+  let dragging = false;
+  let dragStart = null;
+
+  let finalRange = null;
+
+  const MAX_PREVIEW_ROWS = 300;
+  const MAX_PREVIEW_COLS = 100;
+
+  function setStatus(msg, type) {
+    statusEl.className = 'status ' + (type || 'info');
+    statusEl.innerHTML = msg;
+  }
+
+  // ---------- 文件加载 ----------
+  fileBox.addEventListener('click', () => fileInput.click());
+  fileBox.addEventListener('dragover', e => {
+    e.preventDefault(); fileBox.classList.add('dragover');
+  });
+  fileBox.addEventListener('dragleave', () => fileBox.classList.remove('dragover'));
+  fileBox.addEventListener('drop', e => {
+    e.preventDefault(); fileBox.classList.remove('dragover');
+    if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files.length) loadFile(e.target.files[0]);
+  });
+
+  async function loadFile(file) {
+    const ok = /\.(xlsx|xls|xlsm|xlsb)$/i.test(file.name);
+    if (!ok) {
+      setStatus('❌ 请选择 Excel 文件（.xlsx / .xls / .xlsm / .xlsb）', 'error');
+      return;
+    }
+    selectedFile = file;
+    fileNameEl.textContent = '✓ ' + file.name;
+    setStatus('⏳ 正在读取文件…', 'info');
+
+    try {
+      const buf = await file.arrayBuffer();
+      workbook = XLSX.read(buf, { type: 'array', cellStyles: true });
+
+      dragSelection = null;
+      finalRange = null;
+      rangeBar.style.display = 'flex';
+      rangeInput.value = '';
+      rangeCountEl.textContent = '';
+      mergeAlert.style.display = 'none';
+      previewSection.style.display = 'block';
+
+      renderSheetTabs();
+      currentSheetName = workbook.SheetNames[0];
+      renderSheet();
+
+      setStatus('✅ 文件已加载。请框选范围，系统会自动检测范围内的合并单元格。', 'success');
+      updateRunBtn();
+    } catch (err) {
+      console.error(err);
+      setStatus('❌ 读取失败：' + err.message, 'error');
+    }
+  }
+
+  function renderSheetTabs() {
+    sheetTabsEl.innerHTML = '';
+    workbook.SheetNames.forEach(name => {
+      const tab = document.createElement('div');
+      tab.className = 'sheet-tab' + (name === currentSheetName ? ' active' : '');
+      tab.textContent = name;
+      tab.addEventListener('click', () => {
+        currentSheetName = name;
+        dragSelection = null;
+        renderSheetTabs();
+        renderSheet();
+        if (finalRange) detectMergesInRange();
+        applySelectionStyle();
+      });
+      sheetTabsEl.appendChild(tab);
+    });
+  }
+
+  // ---------- 渲染当前表 ----------
+  function renderSheet() {
+    const ws = workbook.Sheets[currentSheetName];
+    if (!ws) return;
+
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+    currentSheetData = aoa;
+
+    let realRows = 0, realCols = 0;
+    if (ws['!ref']) {
+      const r = XLSX.utils.decode_range(ws['!ref']);
+      realRows = r.e.r + 1;
+      realCols = r.e.c + 1;
+    }
+    aoa.forEach((row, i) => {
+      if (row && row.length) {
+        if (i + 1 > realRows) realRows = i + 1;
+        if (row.length > realCols) realCols = row.length;
+      }
+    });
+    currentMaxRows = Math.max(realRows, 1);
+    currentMaxCols = Math.max(realCols, 1);
+
+    currentMerges = (ws['!merges'] || []).slice();
+
+    const previewRows = Math.min(currentMaxRows, MAX_PREVIEW_ROWS);
+    const previewCols = Math.min(currentMaxCols, MAX_PREVIEW_COLS);
+
+    previewTitle.textContent = '数据预览 — ' + currentSheetName;
+    previewSubtitle.textContent =
+      `数据区：A1:${colName(currentMaxCols - 1)}${currentMaxRows}` +
+      `　共 ${currentMaxRows} 行 × ${currentMaxCols} 列` +
+      (currentMerges.length ? `　合并区 ${currentMerges.length} 处` : '') +
+      (previewRows < currentMaxRows || previewCols < currentMaxCols
+        ? `（预览前 ${previewRows}×${previewCols}）` : '');
+
+    const frag = document.createDocumentFragment();
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.className = 'corner';
+    headRow.appendChild(corner);
+    for (let c = 0; c < previewCols; c++) {
+      const th = document.createElement('th');
+      th.textContent = colName(c);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    frag.appendChild(thead);
+
+    const mergeNonAnchor = new Set();
+    const mergeAnchor = new Set();
+    currentMerges.forEach(m => {
+      mergeAnchor.add(m.s.r + ',' + m.s.c);
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c = m.s.c; c <= m.e.c; c++) {
+          if (r === m.s.r && c === m.s.c) continue;
+          mergeNonAnchor.add(r + ',' + c);
+        }
+      }
+    });
+
+    const tbody = document.createElement('tbody');
+    for (let r = 0; r < previewRows; r++) {
+      const tr = document.createElement('tr');
+      const rowHead = document.createElement('th');
+      rowHead.className = 'rowhead';
+      rowHead.textContent = r + 1;
+      tr.appendChild(rowHead);
+
+      for (let c = 0; c < previewCols; c++) {
+        const td = document.createElement('td');
+        td.dataset.r = r;
+        td.dataset.c = c;
+        const key = r + ',' + c;
+        const val = (currentSheetData[r] && currentSheetData[r][c] !== undefined)
+          ? currentSheetData[r][c] : '';
+
+        if (mergeNonAnchor.has(key)) {
+          td.classList.add('merged-down');
+          td.textContent = '';
+        } else {
+          td.textContent = val === '' ? '' : val;
+          td.title = val === '' ? '' : String(val);
+          if (mergeAnchor.has(key)) td.classList.add('merge-anchor');
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    frag.appendChild(tbody);
+
+    gridTable.innerHTML = '';
+    gridTable.appendChild(frag);
+
+    applySelectionStyle();
+    updateMiniMap();
+  }
+
+  function colName(c) {
+    let s = '';
+    c = c + 1;
+    while (c > 0) {
+      const m = (c - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      c = Math.floor((c - 1) / 26);
+    }
+    return s;
+  }
+  function colIndex(s) {
+    s = s.toUpperCase();
+    let n = 0;
+    for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+    return n - 1;
+  }
+
+  // ---------- 框选 ----------
+  gridTable.addEventListener('mousedown', e => {
+    const td = e.target.closest('td');
+    if (!td) return;
+    e.preventDefault();
+    dragging = true;
+    dragStart = { r: +td.dataset.r, c: +td.dataset.c };
+    dragSelection = { r1: dragStart.r, c1: dragStart.c, r2: dragStart.r, c2: dragStart.c };
+    applySelectionStyle();
+    syncRangeInputFromDrag();
+  });
+
+  gridTable.addEventListener('mouseover', e => {
+    if (!dragging) return;
+    const td = e.target.closest('td');
+    if (!td) return;
+    const r = +td.dataset.r;
+    const c = +td.dataset.c;
+    dragSelection = {
+      r1: Math.min(dragStart.r, r),
+      c1: Math.min(dragStart.c, c),
+      r2: Math.max(dragStart.r, r),
+      c2: Math.max(dragStart.c, c)
+    };
+    applySelectionStyle();
+    syncRangeInputFromDrag();
+  });
+
+  tableScroll.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect = tableScroll.getBoundingClientRect();
+    const edge = 40;
+    const speed = 15;
+    if (e.clientY > rect.bottom - edge) tableScroll.scrollTop += speed;
+    else if (e.clientY < rect.top + edge) tableScroll.scrollTop -= speed;
+    if (e.clientX > rect.right - edge) tableScroll.scrollLeft += speed;
+    else if (e.clientX < rect.left + edge) tableScroll.scrollLeft -= speed;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      finalRange = { ...dragSelection };
+      updateRangeCount();
+      updateRunBtn();
+      updateMiniMap();
+      detectMergesInRange();
+    }
+  });
+
+  function applySelectionStyle() {
+    gridTable.querySelectorAll('td.sel').forEach(td => td.classList.remove('sel'));
+    const rng = finalRange || dragSelection;
+    if (!rng) return;
+    const rMax = Math.min(rng.r2, MAX_PREVIEW_ROWS - 1);
+    const cMax = Math.min(rng.c2, MAX_PREVIEW_COLS - 1);
+    for (let r = rng.r1; r <= rMax; r++) {
+      for (let c = rng.c1; c <= cMax; c++) {
+        const td = gridTable.querySelector(`td[data-r="${r}"][data-c="${c}"]`);
+        if (td) td.classList.add('sel');
+      }
+    }
+  }
+
+  function syncRangeInputFromDrag() {
+    if (!dragSelection) return;
+    rangeInput.value = rangeToA1(dragSelection);
+    updateRangeCount(dragSelection);
+    btnFromSelection.disabled = false;
+  }
+
+  function rangeToA1(r) {
+    if (!r) return '';
+    const a1 = colName(r.c1) + (r.r1 + 1);
+    const a2 = colName(r.c2) + (r.r2 + 1);
+    return a1 === a2 ? a1 : (a1 + ':' + a2);
+  }
+
+  function parseA1(str) {
+    if (!str) return null;
+    let s = String(str).replace(/\s/g, '').toUpperCase();
+
+    let m = /^([A-Z]+):([A-Z]+)$/.exec(s);
+    if (m) return { c1: colIndex(m[1]), r1: 0, c2: colIndex(m[2]), r2: 1048575 };
+
+    m = /^(\d+):(\d+)$/.exec(s);
+    if (m) return { r1: +m[1] - 1, c1: 0, r2: +m[2] - 1, c2: 16383 };
+
+    if (/^[A-Z]+$/.test(s)) {
+      const c = colIndex(s);
+      return { c1: c, r1: 0, c2: c, r2: 1048575 };
+    }
+
+    m = /^([A-Z]+)(\d+)$/.exec(s);
+    if (m) {
+      const c = colIndex(m[1]);
+      const r = +m[2] - 1;
+      return { c1: c, r1: r, c2: c, r2: r };
+    }
+
+    m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(s);
+    if (m) {
+      const c1 = colIndex(m[1]), r1 = +m[2] - 1;
+      const c2 = colIndex(m[3]), r2 = +m[4] - 1;
+      return {
+        c1: Math.min(c1, c2), r1: Math.min(r1, r2),
+        c2: Math.max(c1, c2), r2: Math.max(r1, r2)
+      };
+    }
+    return null;
+  }
+
+  rangeInput.addEventListener('input', () => {
+    const r = parseA1(rangeInput.value);
+    if (r) {
+      finalRange = r;
+      applySelectionStyle();
+      updateRangeCount(r);
+      updateRunBtn();
+      rangeCountEl.style.color = '';
+      detectMergesInRange();
+    } else if (rangeInput.value.trim() === '') {
+      finalRange = null;
+      applySelectionStyle();
+      updateRangeCount(null);
+      updateRunBtn();
+      rangeCountEl.style.color = '';
+      mergeAlert.style.display = 'none';
+    } else {
+      rangeCountEl.textContent = '格式无法识别';
+      rangeCountEl.style.color = '#c0392b';
+    }
+  });
+
+  function updateRangeCount(rng) {
+    const r = rng || finalRange;
+    if (!r) { rangeCountEl.textContent = ''; return; }
+    const cells = (r.r2 - r.r1 + 1) * (r.c2 - r.c1 + 1);
+    rangeCountEl.textContent = `共 ${cells} 个单元格`;
+    rangeCountEl.style.color = '#7a95b8';
+  }
+
+  function detectMergesInRange() {
+    if (!finalRange) {
+      mergeAlert.style.display = 'none';
+      return;
+    }
+    const sel = finalRange;
+    const hits = currentMerges.filter(m => {
+      return !(m.e.r < sel.r1 || m.s.r > sel.r2 || m.e.c < sel.c1 || m.s.c > sel.c2);
+    });
+
+    mergeAlert.style.display = 'flex';
+    if (hits.length === 0) {
+      mergeAlert.className = 'merge-alert no-merge';
+      mergeAlert.innerHTML =
+        '<span class="icon">✔</span>' +
+        '<span>当前范围内<b>无合并单元格</b>，将直接按白名单处理。</span>';
+    } else {
+      mergeAlert.className = 'merge-alert has-merge';
+      const list = hits.slice(0, 6).map(m => {
+        const a1 = colName(m.s.c) + (m.s.r + 1);
+        const a2 = colName(m.e.c) + (m.e.r + 1);
+        return a1 === a2 ? a1 : (a1 + ':' + a2);
+      }).join('、');
+      const more = hits.length > 6 ? ` 等 ${hits.length} 处` : '';
+      mergeAlert.innerHTML =
+        '<span class="icon">⚠</span>' +
+        '<span>范围内检测到 <b>' + hits.length + '</b> 处合并单元格（' + list + more + '）。' +
+        '处理时会先<b>拆解并删除合并区的下半部分</b>（保留左上角值），' +
+        '再按白名单规则处理。</span>';
+    }
+  }
+
+  btnFromSelection.addEventListener('click', () => {
+    if (dragSelection) {
+      finalRange = { ...dragSelection };
+      rangeInput.value = rangeToA1(finalRange);
+      applySelectionStyle();
+      updateRangeCount();
+      updateRunBtn();
+      detectMergesInRange();
+    }
+  });
+
+  btnClearRange.addEventListener('click', () => {
+    dragSelection = null;
+    finalRange = null;
+    rangeInput.value = '';
+    rangeCountEl.textContent = '';
+    mergeAlert.style.display = 'none';
+    applySelectionStyle();
+    updateRunBtn();
+  });
+
+  btnSelectAll.addEventListener('click', () => {
+    if (!currentMaxRows || !currentMaxCols) return;
+    finalRange = { r1: 0, c1: 0, r2: currentMaxRows - 1, c2: currentMaxCols - 1 };
+    rangeInput.value = rangeToA1(finalRange);
+    applySelectionStyle();
+    updateRangeCount();
+    updateRunBtn();
+    detectMergesInRange();
+  });
+
+  tableScroll.addEventListener('scroll', updateMiniMap);
+  window.addEventListener('resize', updateMiniMap);
+
+  function updateMiniMap() {
+    const viewW = tableScroll.clientWidth;
+    const scrollW = tableScroll.scrollWidth;
+    if (scrollW <= viewW) {
+      miniView.style.left = '0%';
+      miniView.style.width = '100%';
+      return;
+    }
+    const maxScroll = scrollW - viewW;
+    const widthPct = (viewW / scrollW) * 100;
+    const leftPct = (tableScroll.scrollLeft / maxScroll) * (100 - widthPct);
+    miniView.style.left = leftPct + '%';
+    miniView.style.width = widthPct + '%';
+  }
+
+  function updateRunBtn() {
+    runBtn.disabled = !(workbook && finalRange);
+  }
+
+  // ---------- 白名单 ----------
+  function parseKeepList(text) {
+    return text.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean);
+  }
+  function normalize(v, trim) {
+    let s = (v === null || v === undefined) ? '' : String(v);
+    if (trim) s = s.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '');
+    return s;
+  }
+  function shouldKeep(value, keepList, trim, contains) {
+    const v = normalize(value, trim);
+    for (let i = 0; i < keepList.length; i++) {
+      const k = normalize(keepList[i], trim);
+      if (contains) {
+        if (k !== '' && v.indexOf(k) !== -1) return true;
+      } else {
+        if (v === k) return true;
+      }
+    }
+    return false;
+  }
+
+  // ============================================================
+  //  处理工具
+  // ============================================================
+
+  function rectIntersect(a, b) {
+    return !(a.e.r < b.r1 || a.s.r > b.r2 || a.e.c < b.c1 || a.s.c > b.c2);
+  }
+
+  /** 第一步：拆解与范围有交集的合并区 */
+  function unwrapMergesInRange(ws, sel) {
+    const merges = ws['!merges'] || [];
+    if (!merges.length) return 0;
+    const toRemove = new Set();
+    let count = 0;
+    for (const m of merges) {
+      if (!rectIntersect(m, sel)) continue;
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c = m.s.c; c <= m.e.c; c++) {
+          if (r === m.s.r && c === m.s.c) continue;
+          delete ws[XLSX.utils.encode_cell({ r, c })];
+        }
+      }
+      toRemove.add(m);
+      count++;
+    }
+    if (toRemove.size > 0) {
+      const kept = merges.filter(m => !toRemove.has(m));
+      if (kept.length) ws['!merges'] = kept;
+      else delete ws['!merges'];
+    }
+    return count;
+  }
+
+  /** 第二步：按白名单清理范围内单元格 */
+  function cleanByWhitelist(ws, sel, keepList, trim, contains) {
+    let wsR = -1, wsC = -1;
+    if (ws['!ref']) {
+      const rr = XLSX.utils.decode_range(ws['!ref']);
+      wsR = rr.e.r;
+      wsC = rr.e.c;
+    }
+    const rEnd = Math.min(sel.r2, wsR);
+    const cEnd = Math.min(sel.c2, wsC);
+    let deleted = 0;
+    for (let r = sel.r1; r <= rEnd; r++) {
+      for (let c = sel.c1; c <= cEnd; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (!cell || cell.v === undefined || cell.v === null || cell.v === '') continue;
+        if (!shouldKeep(cell.v, keepList, trim, contains)) {
+          delete ws[addr];
+          deleted++;
+        }
+      }
+    }
+    return deleted;
+  }
+
+  /**
+   * 第三步：物理删除整行为空的空白行
+   * 判定：从 A 列到该表最后一列，全部为空
+   * 方式：重建工作表，跳过空白行，下方行上移
+   */
+  function removeEmptyRows(ws) {
+    if (!ws['!ref']) return 0;
+
+    const oldRange = XLSX.utils.decode_range(ws['!ref']);
+    const maxR = oldRange.e.r;
+    const maxC = oldRange.e.c;
+
+    const isRowEmpty = new Array(maxR + 1).fill(true);
+    for (let r = 0; r <= maxR; r++) {
+      for (let c = 0; c <= maxC; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (cell && cell.v !== undefined && cell.v !== null && cell.v !== '') {
+          isRowEmpty[r] = false;
+          break;
+        }
+      }
+    }
+
+    const keptRows = [];
+    for (let r = 0; r <= maxR; r++) {
+      if (!isRowEmpty[r]) keptRows.push(r);
+    }
+
+    const deletedCount = (maxR + 1) - keptRows.length;
+    if (deletedCount === 0) return 0;
+
+    const newWs = {};
+    for (let newR = 0; newR < keptRows.length; newR++) {
+      const oldR = keptRows[newR];
+      for (let c = 0; c <= maxC; c++) {
+        const oldAddr = XLSX.utils.encode_cell({ r: oldR, c });
+        const cell = ws[oldAddr];
+        if (cell === undefined) continue;
+        const newAddr = XLSX.utils.encode_cell({ r: newR, c });
+        newWs[newAddr] = cell;
+      }
+    }
+
+    if (ws['!merges'] && ws['!merges'].length) {
+      const rowMap = new Map();
+      keptRows.forEach((oldR, newR) => rowMap.set(oldR, newR));
+
+      const newMerges = [];
+      for (const m of ws['!merges']) {
+        let ok = true;
+        for (let r = m.s.r; r <= m.e.r; r++) {
+          if (!rowMap.has(r)) { ok = false; break; }
+        }
+        if (!ok) continue;
+        newMerges.push({
+          s: { r: rowMap.get(m.s.r), c: m.s.c },
+          e: { r: rowMap.get(m.e.r), c: m.e.c }
+        });
+      }
+      if (newMerges.length) newWs['!merges'] = newMerges;
+    }
+
+    const newMaxR = keptRows.length - 1;
+    let newMaxC = -1;
+    for (const key in newWs) {
+      if (key[0] === '!') continue;
+      const addr = XLSX.utils.decode_cell(key);
+      if (addr.c > newMaxC) newMaxC = addr.c;
+    }
+    if (newMaxR >= 0 && newMaxC >= 0) {
+      newWs['!ref'] = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: newMaxR, c: newMaxC }
+      });
+    } else {
+      newWs['!ref'] = 'A1:A1';
+    }
+
+    if (ws['!cols']) newWs['!cols'] = ws['!cols'];
+    if (ws['!rows']) {
+      const newRows = [];
+      keptRows.forEach(oldR => {
+        newRows.push(ws['!rows'][oldR] || {});
+      });
+      newWs['!rows'] = newRows;
+    }
+    if (ws['!autofilter']) newWs['!autofilter'] = ws['!autofilter'];
+
+    for (const k in ws) delete ws[k];
+    for (const k in newWs) ws[k] = newWs[k];
+
+    return deletedCount;
+  }
+
+  // ---------- 处理并下载 ----------
+  runBtn.addEventListener('click', async () => {
+    if (!workbook || !finalRange) return;
+
+    // 先读取白名单
+    const keepList = parseKeepList(document.getElementById('keepInput').value);
+    const trim = document.getElementById('optTrim').checked;
+    const contains = document.getElementById('optContains').checked;
+    const allSheets = document.getElementById('optAllSheets').checked;
+
+    // ===== 白名单为空 → 不处理，弹窗提示 =====
+    if (keepList.length === 0) {
+      setStatus(
+        '⚠️ 白名单为空，未执行任何处理。<br>' +
+        '请先在「② 保留内容（白名单）」中填写要保留的内容，再点处理。',
+        'error'
+      );
+      alert(
+        '白名单为空！\n\n' +
+        '请先在「② 保留内容（白名单）」中填写要保留的内容：\n' +
+        '· 每行一个，或用逗号分隔\n' +
+        '· 例如：苹果, 香蕉, 橙子\n\n' +
+        '填写后再点「开始处理并下载」。'
+      );
+      return;  // 直接返回，不做任何处理
+    }
+
+    runBtn.disabled = true;
+    setStatus('⏳ 正在处理…', 'info');
+
+    try {
+      const sel = { ...finalRange };
+      const targetSheets = allSheets ? workbook.SheetNames.slice() : [currentSheetName];
+
+      let totalDel = 0;
+      let totalMerges = 0;
+      let totalEmptyRows = 0;
+
+      for (const sn of targetSheets) {
+        const ws = workbook.Sheets[sn];
+        if (!ws) continue;
+
+        // 第一步：只拆解范围涉及的合并区
+        totalMerges += unwrapMergesInRange(ws, sel);
+
+        // 第二步：按白名单清理范围内单元格
+        totalDel += cleanByWhitelist(ws, sel, keepList, trim, contains);
+
+        // 第三步：物理删除整行为空的空白行
+        totalEmptyRows += removeEmptyRows(ws);
+      }
+
+      // 下载
+      const outName = buildOutName(selectedFile.name);
+      const outData = XLSX.write(workbook, {
+        bookType: 'xlsx', type: 'array', cellStyles: true
+      });
+      const blob = new Blob([outData], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = outName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // 刷新预览
+      renderSheet();
+      if (finalRange) detectMergesInRange();
+      applySelectionStyle();
+
+      setStatus(
+        '✅ 处理完成！<br>' +
+        '处理范围：<b>' + rangeToA1(sel) + '</b><br>' +
+        '处理工作表：' + targetSheets.join('、') + '<br>' +
+        (totalMerges > 0
+          ? '范围内拆解合并区：<b>' + totalMerges + '</b> 处<br>'
+          : '范围内无合并单元格<br>') +
+        '按白名单清空：<b>' + totalDel + '</b> 个单元格<br>' +
+        '删除空白行：<b>' + totalEmptyRows + '</b> 行<br>' +
+        '已下载：<b>' + outName + '</b>',
+        'success'
+      );
+    } catch (err) {
+      console.error(err);
+      setStatus('❌ 处理出错：' + err.message, 'error');
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+
+  function buildOutName(name) {
+    const dot = name.lastIndexOf('.');
+    if (dot === -1) return name + '_已清理.xlsx';
+    return name.slice(0, dot) + '_已清理.xlsx';
+  }
+})();
+</script>
+</body>
+</html>
